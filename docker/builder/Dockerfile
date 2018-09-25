@@ -18,19 +18,20 @@ RUN apk --no-cache add libc-dev cmake && \
     # md5sum /tmp/upx-3.95-amd64_linux.tar.xz && \
     # /bin/tar xf /tmp/upx-3.95-amd64_linux.tar.xz && \
     # /bin/tar -C /bin --strip-components=1 -xzf /tmp/upx-3.95-amd64_linux.tar.xz && \
-    git clone https://github.com/SamuelMarks/docker-static-bin /build/docker-static-bin && \
+    git clone https://github.com/SamuelMarks/docker-static-bin /build/docker-static-bin -b boxed-main && \
     mkdir /build/docker-static-bin/c/cmake-build-release && \
     cd    /build/docker-static-bin/c/cmake-build-release && \
-    cmake -DCMAKE_BUILD_TYPE=Release .. && \
-    cd /build/docker-static-bin/c/cmd && \
-    gcc copy.c      -o "/cp_bin/copy"      -Os -static -static-libgcc -Wno-implicit-function-declaration && \
-    gcc env.c       -o "/cp_bin/env"       -Os -static -static-libgcc -Wno-implicit-function-declaration && \
-    gcc list.c      -o "/cp_bin/list"      -Os -static -static-libgcc && \
-    gcc crappy_sh.c -o "/cp_bin/crappy_sh" -Os -static -Wno-implicit-function-declaration -Wno-int-conversion -I./../cmake-build-release && \
-    strip /cp_bin/crappy_sh /cp_bin/copy /cp_bin/env /cp_bin/list /cp_bin/lachesis && \
-    /cp_bin/upx --brute /cp_bin/lachesis /cp_bin/crappy_sh /cp_bin/copy /cp_bin/list
+    cmake -DCMAKE_BUILD_TYPE=Release .. && make && \
+    mv main /cp_bin/cp_bin && cd /cp_bin \
+    ln -s /cp_bin/cp_bin /cp_bin/copy && \
+    ln -s /cp_bin/cp_bin /cp_bin/crappy_sh && \
+    ln -s /cp_bin/cp_bin /cp_bin/env && \
+    ln -s /cp_bin/cp_bin /cp_bin/list && \
+    ln -s /cp_bin/cp_bin /cp_bin/symlink && \
+    strip -s /cp_bin/cp_bin /cp_bin/lachesis && \
+    /cp_bin/upx --brute /cp_bin/lachesis /cp_bin/cp_bin
 
-FROM scratch as lachesis
+FROM alpine as lachesis_base
 
 ENV node_num=0
 ENV node_addr='127.0.0.1'
@@ -43,9 +44,9 @@ EXPOSE 12000
 # cp -r /etc/ssl/certs certs, then add to your `docker build`: `--build-arg ca_certificates=certs`
 ARG ca_certificates
 ADD "$ca_certificates" /etc/ssl/certs/
-COPY --from=0 /cp_bin /bin
+COPY --from=0 /cp_bin /cp_bin
 
 COPY peers.json /lachesis_data_dir/
 COPY nodes /nodes
 
-ENTRYPOINT ["/bin/crappy_sh", "-v", "-e", "-c", "/bin/env ; /bin/list /cp_bin ; /cp_bin/upx -d /cp_bin/lachesis /cp_bin/crappy_sh /cp_bin/copy /cp_bin/list ;  /bin/copy /nodes/$node_num/priv_key.pem /lachesis_data_dir/priv_key.pem ; /bin/list /lachesis_data_dir ; /bin/lachesis run --datadir /lachesis_data_dir --store_path /lachesis_data_dir/badger_db -node_addr=$node_addr:12000 -heartbeat=100 -no_client"]
+ENTRYPOINT ["/cp_bin/crappy_sh", "-v", "-e", "-c", "/cp_bin/upx -d /cp_bin/cp_bin /cp_bin/lachesis ; /cp_bin/env ; /cp_bin/list /cp_bin ; /cp_bin/list /nodes ; /cp_bin/copy /nodes/$node_num/priv_key.pem /lachesis_data_dir/priv_key.pem ; /cp_bin/list /lachesis_data_dir ; /cp_bin/lachesis run --datadir /lachesis_data_dir --store_path /lachesis_data_dir/badger_db -node_addr=$node_addr:12000 -heartbeat=100 -no_client"]
